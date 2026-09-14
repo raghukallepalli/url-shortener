@@ -19,6 +19,12 @@ spring:
 server:
   shutdown: graceful
 
+shortener:
+  base-url: ${BASE_URL:http://localhost:8080}
+  code-length: 8
+  collision-retries: 5
+  default-ttl: 365d
+
 management:
   endpoints:
     web:

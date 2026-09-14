@@ -14,3 +14,9 @@ AI assists within defined engineering tasks. The engineer owns correctness, secu
 | Hibernate configuration | Edited                | Used `ddl-auto: validate` because Flyway owns production schema changes                             |
 
 
+| Task           | Copilot result                  | Engineer action      | Rationale                                                  |
+| -------------- | ------------------------------- | -------------------- | ---------------------------------------------------------- |
+| JPA entity     | Generated entity with setters   | Edited               | Protected immutable identity and creation fields           |
+| Code generator | Generated Base62 candidate      | Accepted with review | SecureRandom provides unpredictable codes                  |
+| URL validator  | Added scheme and host checks    | Expanded             | Added private-address and credential rejection             |
+| Generator test | Proposed random uniqueness test | Rejected             | Statistical tests can be flaky and cannot prove uniqueness |
