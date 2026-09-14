@@ -19,6 +19,10 @@ spring:
 server:
   shutdown: graceful
 
+logging:
+  pattern:
+    level: "%5p [${spring.application.name:},%X{traceId:-}]"
+
 shortener:
   base-url: ${BASE_URL:http://localhost:8080}
   code-length: 8

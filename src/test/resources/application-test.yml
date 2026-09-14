@@ -1,6 +1,18 @@
 spring:
+  datasource:
+    url: jdbc:h2:mem:shortener;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+
   flyway:
     enabled: false
+
   jpa:
     hibernate:
       ddl-auto: create-drop
+
+shortener:
+  base-url: http://localhost:8080
+  code-length: 8
+  collision-retries: 5
+  default-ttl: 365d
