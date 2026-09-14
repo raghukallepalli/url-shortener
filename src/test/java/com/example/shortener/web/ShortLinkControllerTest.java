@@ -14,9 +14,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 
+import com.example.shortener.api.AnalyticsResponse;
 import com.example.shortener.api.LinkResponse;
 import com.example.shortener.exception.AliasAlreadyExistsException;
+import com.example.shortener.exception.InvalidAnalyticsRangeException;
+import com.example.shortener.service.AnalyticsService;
 import com.example.shortener.service.ShortLinkService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,6 +50,9 @@ class ShortLinkControllerTest {
 
 	@MockitoBean
 	private ShortLinkService shortLinkService;
+
+	@MockitoBean
+	private AnalyticsService analyticsService;
 
 	@Test
 	void postValidRequestReturnsCreatedResponseAndLocation() throws Exception {
@@ -93,6 +100,34 @@ class ShortLinkControllerTest {
 				.andExpect(status().isOk())
 				.andExpect(header().exists("X-Request-Id"))
 				.andExpect(jsonPath("$.code").value(RESPONSE.code()));
+	}
+
+	@Test
+	void getAnalyticsReturnsServiceResponseForIsoRange() throws Exception {
+		Instant from = Instant.parse("2026-09-13T12:00:00Z");
+		Instant to = Instant.parse("2026-09-14T12:00:00Z");
+		AnalyticsResponse response = new AnalyticsResponse("abcd1234", from, to, 3, List.of());
+		when(analyticsService.getAnalytics("abcd1234", from, to)).thenReturn(response);
+
+		mockMvc.perform(get("/api/v1/links/abcd1234/analytics")
+				.param("from", from.toString())
+				.param("to", to.toString()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.code").value("abcd1234"))
+				.andExpect(jsonPath("$.totalClicks").value(3));
+
+		verify(analyticsService).getAnalytics("abcd1234", from, to);
+	}
+
+	@Test
+	void invalidAnalyticsRangeReturnsBadRequest() throws Exception {
+		when(analyticsService.getAnalytics(any(), any(), any()))
+				.thenThrow(new InvalidAnalyticsRangeException("Analytics range start must be before its end"));
+
+		mockMvc.perform(get("/api/v1/links/abcd1234/analytics"))
+				.andExpect(status().isBadRequest())
+				.andExpect(header().exists("X-Request-Id"))
+				.andExpect(jsonPath("$.code").value("INVALID_ANALYTICS_RANGE"));
 	}
 
 	@Test

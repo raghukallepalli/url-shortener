@@ -39,7 +39,11 @@ class ShortLinkServiceTest {
 	private static final Instant NOW = Instant.parse("2026-09-14T12:00:00Z");
 	private static final Duration DEFAULT_TTL = Duration.ofDays(365);
 	private static final ShortenerProperties PROPERTIES = new ShortenerProperties(
-			URI.create("http://localhost:8080"), 8, 2, DEFAULT_TTL);
+			URI.create("http://localhost:8080"),
+			8,
+			2,
+			DEFAULT_TTL,
+			new ShortenerProperties.Analytics("test-secret", Duration.ofDays(30), Duration.ofDays(90)));
 
 	@Test
 	void createsGeneratedCode() {

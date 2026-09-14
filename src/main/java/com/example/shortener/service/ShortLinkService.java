@@ -89,8 +89,7 @@ public class ShortLinkService {
 	}
 
 	public ShortLink resolve(String code) {
-		ShortLink link = shortLinkRepository.findByCode(code)
-				.orElseThrow(() -> new LinkNotFoundException("Short link was not found: " + code));
+		ShortLink link = requireExisting(code);
 		if (!link.isActive()) {
 			throw new LinkDisabledException("Short link is disabled: " + code);
 		}
@@ -98,6 +97,12 @@ public class ShortLinkService {
 			throw new LinkExpiredException("Short link has expired: " + code);
 		}
 		return link;
+	}
+
+	@Transactional(readOnly = true)
+	public ShortLink requireExisting(String code) {
+		return shortLinkRepository.findByCode(code)
+				.orElseThrow(() -> new LinkNotFoundException(code));
 	}
 
 	public LinkResponse get(String code) {

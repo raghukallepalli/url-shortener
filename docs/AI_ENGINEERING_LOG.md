@@ -35,3 +35,13 @@ Repository tests use H2 with Hibernate-managed `create-drop` schema. They valida
 | Time handling     | Direct `Instant.now()`             | Edited          | Injected `Clock` makes expiration deterministic and testable            |
 | Integrity errors  | Treat every violation as collision | Rejected        | Integrity failures must be classified or propagated                     |
 
+
+
+| Copilot suggestion                  | Engineer action | Reason                                       |
+| ----------------------------------- | --------------- | -------------------------------------------- |
+| Modify V1 to add clicks             | Rejected        | Applied migrations are immutable; created V2 |
+| Store complete referrer             | Rejected        | Only hostname is needed                      |
+| Store raw IP                        | Rejected        | Used keyed HMAC                              |
+| Fire-and-forget executor            | Rejected        | It can silently lose accepted clicks         |
+| Add analytics before resolving link | Rejected        | Invalid links must not produce events        |
+| Replace redirect implementation     | Edited          | Preserved existing status and headers        |

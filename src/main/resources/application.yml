@@ -28,6 +28,10 @@ shortener:
   code-length: 8
   collision-retries: 5
   default-ttl: 365d
+  analytics:
+    ip-hash-secret: ${IP_HASH_SECRET:local-development-secret-change-me}
+    default-range: 30d
+    maximum-range: 90d
 
 management:
   endpoints:

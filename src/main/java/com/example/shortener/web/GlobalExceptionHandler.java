@@ -7,6 +7,7 @@ import com.example.shortener.api.ErrorResponse;
 import com.example.shortener.exception.AliasAlreadyExistsException;
 import com.example.shortener.exception.CodeGenerationException;
 import com.example.shortener.exception.IdempotencyConflictException;
+import com.example.shortener.exception.InvalidAnalyticsRangeException;
 import com.example.shortener.exception.LinkDisabledException;
 import com.example.shortener.exception.LinkExpiredException;
 import com.example.shortener.exception.LinkNotFoundException;
@@ -78,6 +79,14 @@ public class GlobalExceptionHandler {
 			HttpServletRequest request) {
 		return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
 				.body(errorResponse("CODE_GENERATION_FAILED", exception.getMessage(), request));
+	}
+
+	@ExceptionHandler(InvalidAnalyticsRangeException.class)
+	public ResponseEntity<ErrorResponse> handleInvalidAnalyticsRange(
+			InvalidAnalyticsRangeException exception,
+			HttpServletRequest request) {
+		return ResponseEntity.badRequest()
+				.body(errorResponse("INVALID_ANALYTICS_RANGE", exception.getMessage(), request));
 	}
 
 	@ExceptionHandler(MethodArgumentNotValidException.class)

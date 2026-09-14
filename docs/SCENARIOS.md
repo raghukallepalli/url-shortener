@@ -90,6 +90,52 @@ flowchart LR
 - No analytics, authorization, rate limiting, abuse protection, or tenant isolation is implemented in this slice.
 - The status-code discrepancy for disabled and expired links is intentional in the current implementation but unresolved against the original requirements.
 
+## Brownfield: Click Analytics
+
+### Current Redirect Control Flow
+
+`GET /{code}` enters `RedirectController.redirect`, which calls `ShortLinkService.resolve`. The service loads the link by code and rejects unknown, disabled, and expired links before the controller creates the redirect response. `RequestIdFilter` supplies a request trace ID; `GlobalExceptionHandler` converts domain failures to JSON errors.
+
+### Existing Behavior That Must Remain Unchanged
+
+- A valid active link returns `302 Found`.
+- The `Location` header contains the original URL.
+- The redirect includes `Cache-Control: no-store`.
+- An unknown link returns `404`.
+- An expired or disabled link returns `410`.
+
+The existing `Pragma: no-cache`, bodyless redirect response, short-code path constraint, and no-event behavior for rejected redirects must also remain unchanged.
+
+### Planned Extension Points
+
+- Update `RedirectController` to read the `Referer` header and pass only analytics-safe request data to a redirect-recording operation.
+- Extend `ShortLinkService` or introduce a dedicated redirect/analytics service to validate link state and persist an accepted click before returning the redirect target.
+- Add an append-only click-event entity and repository, range query service, analytics response DTOs, and an analytics endpoint under `/api/v1/links/{code}`.
+- Analytics lookup must load the link without `resolve`, because counts must remain available after disablement or expiration.
+
+### Database and Query Design
+
+Add a Flyway `V2` migration for a durable `click_events` table containing a generated ID, `short_link_id` foreign key, `clicked_at TIMESTAMPTZ`, and nullable sanitized `referrer_origin`. Do not cascade-delete click events because disabled and expired links retain analytics.
+
+Use half-open time ranges, `[from, to)`, for exact counts and top-referrer aggregation. Start with indexes on `(short_link_id, clicked_at)` and evaluate a `(short_link_id, clicked_at, referrer_origin)` index against PostgreSQL query plans for the grouped top-referrer query. Bound the requested range and result limit to prevent unbounded aggregation work.
+
+### Transaction and Failure Risks
+
+Immediate, durable, exact analytics requires synchronous event persistence before issuing `302`. If event persistence fails but the redirect proceeds, an accepted click is permanently lost; the failure contract must instead prevent a successful redirect or explicitly accept loss. A read through `resolve` followed by a separate insert also races with disablement. A single transactional redirect-recording operation is the conservative starting point.
+
+### Privacy Risks
+
+Never store raw IP addresses. Do not retain raw user agents, cookies, or the complete `Referer` URL because query strings, paths, and credentials can contain sensitive data. Normalize an accepted referrer to a bounded origin and discard user-info, path, query, and fragment. Define retention and deletion policies before event volumes grow.
+
+`ClickMetadataExtractor` currently uses `HttpServletRequest.getRemoteAddr()` and does not trust `X-Forwarded-For`, because clients can spoof that header without a trusted-proxy configuration. Production deployment requires an approved proxy trust boundary and forwarding-header policy before deriving client identity behind a reverse proxy.
+
+### Required Regression Coverage
+
+- `RedirectControllerTest`: active redirects record exactly one click; invalid, unknown, expired, and disabled requests record none; all existing status and header assertions remain unchanged.
+- Analytics service and repository tests: exact counts, range boundaries, top-referrer ordering and ties, null referrers, sanitized origins, and analytics access for disabled or expired links.
+- `ShortLinkApiIntegrationTest`: immediate visibility after redirect, durable events across application-context restart, disabled/expired analytics access, and the agreed analytics-write failure behavior.
+- PostgreSQL Testcontainers tests: apply Flyway migrations and verify event constraints, indexes, aggregation queries, and transaction behavior against the production dialect.
+
 ## Engineer Sign-Off Criteria
 
 - Confirm the required-versus-optional idempotency-key policy.

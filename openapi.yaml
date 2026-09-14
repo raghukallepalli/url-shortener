@@ -67,6 +67,43 @@ paths:
           $ref: '#/components/responses/NotFound'
         '410':
           $ref: '#/components/responses/Gone'
+  /api/v1/links/{code}/analytics:
+    parameters:
+      - $ref: '#/components/parameters/Code'
+    get:
+      summary: Get click analytics for a short link
+      description: >-
+        Returns analytics for the half-open interval [from, to). When neither parameter is
+        provided, the interval defaults to the trailing 30 days ending at the current time.
+        A requested interval cannot exceed 90 days. Analytics remains accessible for expired
+        or disabled links.
+      operationId: getLinkAnalytics
+      parameters:
+        - name: from
+          in: query
+          required: false
+          description: ISO-8601 interval start. Defaults to 30 days before `to`.
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: false
+          description: ISO-8601 exclusive interval end. Defaults to the current time.
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Click analytics for the requested interval.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsResponse'
+        '400':
+          $ref: '#/components/responses/InvalidAnalyticsRange'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /{code}:
     parameters:
       - $ref: '#/components/parameters/Code'
@@ -141,6 +178,40 @@ components:
           type: string
           format: date-time
           nullable: true
+    AnalyticsResponse:
+      type: object
+      required: [code, from, to, totalClicks, topReferrers]
+      properties:
+        code:
+          type: string
+          description: Short link code.
+        from:
+          type: string
+          format: date-time
+          description: Inclusive start of the analytics interval.
+        to:
+          type: string
+          format: date-time
+          description: Exclusive end of the analytics interval.
+        totalClicks:
+          type: integer
+          format: int64
+          minimum: 0
+        topReferrers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReferrerStat'
+    ReferrerStat:
+      type: object
+      required: [referrer, clicks]
+      properties:
+        referrer:
+          type: string
+          description: Referrer hostname, or `direct` when no usable referrer was supplied.
+        clicks:
+          type: integer
+          format: int64
+          minimum: 0
     ErrorResponse:
       type: object
       required: [code, message, traceId, timestamp]
@@ -157,6 +228,12 @@ components:
   responses:
     BadRequest:
       description: Invalid request input.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InvalidAnalyticsRange:
+      description: Invalid analytics range. The error response code is `INVALID_ANALYTICS_RANGE`.
       content:
         application/json:
           schema:

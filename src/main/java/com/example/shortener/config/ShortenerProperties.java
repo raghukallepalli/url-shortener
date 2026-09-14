@@ -3,6 +3,7 @@ package com.example.shortener.config;
 import java.net.URI;
 import java.time.Duration;
 
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -15,5 +16,12 @@ public record ShortenerProperties(
 		URI baseUrl,
 		@Min(6) @Max(16) int codeLength,
 		@Min(1) @Max(10) int collisionRetries,
-		@NotNull Duration defaultTtl) {
+		@NotNull Duration defaultTtl,
+		@NotNull Analytics analytics) {
+
+	public record Analytics(
+			@NotBlank String ipHashSecret,
+			@NotNull Duration defaultRange,
+			@NotNull Duration maximumRange) {
+	}
 }

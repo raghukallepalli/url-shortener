@@ -1,5 +1,6 @@
 package com.example.shortener.web;
 
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -15,6 +16,9 @@ import com.example.shortener.domain.ShortLink;
 import com.example.shortener.exception.LinkDisabledException;
 import com.example.shortener.exception.LinkExpiredException;
 import com.example.shortener.exception.LinkNotFoundException;
+import com.example.shortener.service.AnalyticsService;
+import com.example.shortener.service.ClickMetadata;
+import com.example.shortener.service.ClickMetadataExtractor;
 import com.example.shortener.service.ShortLinkService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,15 +41,26 @@ class RedirectControllerTest {
 	@MockitoBean
 	private ShortLinkService shortLinkService;
 
+	@MockitoBean
+	private AnalyticsService analyticsService;
+
+	@MockitoBean
+	private ClickMetadataExtractor clickMetadataExtractor;
+
 	@Test
 	void existingActiveLinkReturnsRedirectWithNoCacheHeaders() throws Exception {
-		when(shortLinkService.resolve("abcd1234")).thenReturn(activeLink());
+		ShortLink link = activeLink();
+		ClickMetadata metadata = new ClickMetadata("127.0.0.1", null, null);
+		when(shortLinkService.resolve("abcd1234")).thenReturn(link);
+		when(clickMetadataExtractor.extract(org.mockito.ArgumentMatchers.any())).thenReturn(metadata);
 
 		mockMvc.perform(get("/abcd1234"))
 				.andExpect(status().isFound())
 				.andExpect(header().string("Location", "https://example.com/target"))
 				.andExpect(header().string("Cache-Control", "no-store"))
 				.andExpect(header().string("Pragma", "no-cache"));
+
+		verify(analyticsService).recordClick(link, metadata);
 	}
 
 	@Test
@@ -56,6 +71,8 @@ class RedirectControllerTest {
 		mockMvc.perform(get("/missing1"))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.code").value("LINK_NOT_FOUND"));
+
+		verifyNoInteractions(analyticsService, clickMetadataExtractor);
 	}
 
 	@Test
@@ -66,6 +83,8 @@ class RedirectControllerTest {
 		mockMvc.perform(get("/expired1"))
 				.andExpect(status().isGone())
 				.andExpect(jsonPath("$.code").value("LINK_EXPIRED"));
+
+		verifyNoInteractions(analyticsService, clickMetadataExtractor);
 	}
 
 	@Test
@@ -76,13 +95,15 @@ class RedirectControllerTest {
 		mockMvc.perform(get("/disabled1"))
 				.andExpect(status().isGone())
 				.andExpect(jsonPath("$.code").value("LINK_DISABLED"));
+
+		verifyNoInteractions(analyticsService, clickMetadataExtractor);
 	}
 
 	@Test
 	void invalidCodeFormatDoesNotInvokeService() throws Exception {
 		mockMvc.perform(get("/bad"));
 
-		verifyNoInteractions(shortLinkService);
+		verifyNoInteractions(shortLinkService, analyticsService, clickMetadataExtractor);
 	}
 
 	private ShortLink activeLink() {
