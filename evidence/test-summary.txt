@@ -1,0 +1,11 @@
+Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.190 s -- in com.example.shortener.domain.ShortLinkTest
+Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 10.85 s -- in com.example.shortener.repository.ShortLinkRepositoryTest
+Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.198 s -- in com.example.shortener.service.AnalyticsServiceTest
+Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.052 s -- in com.example.shortener.service.CodeGeneratorTest
+Tests run: 16, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.371 s -- in com.example.shortener.service.ShortLinkServiceTest
+Tests run: 11, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.371 s -- in com.example.shortener.service.UrlSafetyValidatorTest
+Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.092 s -- in com.example.shortener.service.UrlSafetyValidatorTests
+Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 6.889 s -- in com.example.shortener.ShortLinkApiIntegrationTest
+Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.074 s -- in com.example.shortener.web.RedirectControllerTest
+Tests run: 8, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.698 s -- in com.example.shortener.web.ShortLinkControllerTest
+Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.173 s -- in com.example.url_shortener.UrlShortenerApplicationTests

@@ -1,0 +1,6 @@
+HTTP/1.1 200 
+X-Request-Id: 35ba0e7f-947d-4622-94fb-1385ef0d7009
+Content-Type: application/vnd.spring-boot.actuator.v3+json
+Transfer-Encoding: chunked
+Date: Mon, 14 Sep 2026 10:04:41 GMT
+

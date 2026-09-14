@@ -1,0 +1,27 @@
+﻿UTC ISO-8601 timestamp: 2026-09-14T09:58:10.0159581Z
+
+[java -version]
+openjdk version "17.0.20.1" 2026-08-18
+OpenJDK Runtime Environment Temurin-17.0.20.1+1 (build 17.0.20.1+1)
+OpenJDK 64-Bit Server VM Temurin-17.0.20.1+1 (build 17.0.20.1+1, mixed mode, sharing)
+[exit code: 0]
+
+[mvn -version]
+Apache Maven 3.9.16 (2bdd9fddda4b155ebf8000e807eb73fd829a51d5)
+Maven home: C:\tools\apache-maven-3.9.16-bin\apache-maven-3.9.16
+Java version: 17.0.20.1, vendor: Eclipse Adoptium, runtime: C:\Program Files\Eclipse Adoptium\jdk-17.0.20.101-hotspot
+Default locale: en_IN, platform encoding: Cp1252
+OS name: "windows 11", version: "10.0", arch: "amd64", family: "windows"
+[exit code: 0]
+
+[docker --version]
+Docker version 29.7.2, build a7dcaa6
+[exit code: 0]
+
+[docker compose version]
+Docker Compose version v5.5.1
+[exit code: 0]
+
+[git rev-parse HEAD]
+0cda0f8e728b31f97297e4b97dc700b2370933e4
+[exit code: 0]

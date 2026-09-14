@@ -1,0 +1,8 @@
+HTTP/1.1 302 
+X-Request-Id: 8ce92bad-69c4-4d86-9ff5-bd9f949e0590
+Location: https://example.com/products
+Cache-Control: no-store
+Pragma: no-cache
+Content-Length: 0
+Date: Mon, 14 Sep 2026 10:12:26 GMT
+
