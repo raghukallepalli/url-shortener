@@ -20,3 +20,18 @@ AI assists within defined engineering tasks. The engineer owns correctness, secu
 | Code generator | Generated Base62 candidate      | Accepted with review | SecureRandom provides unpredictable codes                  |
 | URL validator  | Added scheme and host checks    | Expanded             | Added private-address and credential rejection             |
 | Generator test | Proposed random uniqueness test | Rejected             | Statistical tests can be flaky and cannot prove uniqueness |
+
+## Persistence Test Scope
+
+Repository tests use H2 with Hibernate-managed `create-drop` schema. They validate application persistence behavior, including repository queries, unique constraints, and optimistic-lock version initialization, but do not establish exact PostgreSQL or Flyway migration compatibility. Add PostgreSQL integration tests with Testcontainers later to verify the production dialect, migrations, indexes, and constraints.
+
+
+
+| Task              | Copilot suggestion                 | Engineer action | Rationale                                                               |
+| ----------------- | ---------------------------------- | --------------- | ----------------------------------------------------------------------- |
+| Collision retries | Retry inside one transaction       | Rejected        | PostgreSQL marks the transaction rollback-only after constraint failure |
+| Insert writer     | Separate `REQUIRES_NEW` component  | Accepted        | Every collision attempt receives a usable transaction                   |
+| Uniqueness        | Check repository before insert     | Edited          | Pre-check is only an optimization; database constraint is authoritative |
+| Time handling     | Direct `Instant.now()`             | Edited          | Injected `Clock` makes expiration deterministic and testable            |
+| Integrity errors  | Treat every violation as collision | Rejected        | Integrity failures must be classified or propagated                     |
+
