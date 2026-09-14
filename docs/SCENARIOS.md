@@ -92,58 +92,68 @@ flowchart LR
 
 ## Brownfield: Click Analytics
 
-### Current Redirect Control Flow
+### Existing Behavior and Data Flow
 
-`GET /{code}` enters `RedirectController.redirect`, which calls `ShortLinkService.resolve`. The service loads the link by code and rejects unknown, disabled, and expired links before the controller creates the redirect response. `RequestIdFilter` supplies a request trace ID; `GlobalExceptionHandler` converts domain failures to JSON errors.
+`GET /{code}` enters `RedirectController.redirect`. `ShortLinkService.resolve` loads the link and rejects unknown, disabled, and expired codes before analytics is invoked. For an accepted link, `ClickMetadataExtractor` reads the request remote address, `Referer`, and `User-Agent`; `AnalyticsService.recordClick` persists and flushes one `ClickEvent`; then the controller returns the existing bodyless `302 Found` response.
 
-### Existing Behavior That Must Remain Unchanged
+Analytics is read through `GET /api/v1/links/{code}/analytics`. `AnalyticsService.getAnalytics` uses `requireExisting`, rather than `resolve`, so aggregates remain available for disabled and expired links. It returns exact half-open-range counts, `[from, to)`, and at most ten referrer-host aggregates. Omitted dates select the configured 30-day range ending at the current injected-clock instant; ranges ending in the future, empty or reversed ranges, and ranges over the 90-day configured maximum return `400 INVALID_ANALYTICS_RANGE`.
 
-- A valid active link returns `302 Found`.
-- The `Location` header contains the original URL.
-- The redirect includes `Cache-Control: no-store`.
-- An unknown link returns `404`.
-- An expired or disabled link returns `410`.
+The existing redirect contract remains unchanged: active links return `302 Found` with the original `Location`, `Cache-Control: no-store`, and `Pragma: no-cache`; unknown links return `404`; disabled and expired links return `410`; rejected requests create no event.
 
-The existing `Pragma: no-cache`, bodyless redirect response, short-code path constraint, and no-event behavior for rejected redirects must also remain unchanged.
+### Impacted Modules
 
-### Planned Extension Points
+- Web: `RedirectController` records the accepted click, while `ShortLinkController` exposes the analytics endpoint.
+- Service: `AnalyticsService` hashes and reduces request metadata, persists events, validates ranges, and queries aggregates; `ClickMetadataExtractor` extracts the three request inputs.
+- Persistence: `ClickEvent`, `ClickEventRepository`, and Flyway migration `V2__create_click_events.sql` own the append-only event store and aggregate queries.
+- API and errors: `AnalyticsResponse`, `ReferrerStat`, `InvalidAnalyticsRangeException`, and `GlobalExceptionHandler` define the analytics response and invalid-range error contract.
+- Configuration: `ShortenerProperties.Analytics` supplies the IP HMAC secret plus default and maximum query ranges.
 
-- Update `RedirectController` to read the `Referer` header and pass only analytics-safe request data to a redirect-recording operation.
-- Extend `ShortLinkService` or introduce a dedicated redirect/analytics service to validate link state and persist an accepted click before returning the redirect target.
-- Add an append-only click-event entity and repository, range query service, analytics response DTOs, and an analytics endpoint under `/api/v1/links/{code}`.
-- Analytics lookup must load the link without `resolve`, because counts must remain available after disablement or expiration.
+### V2 Migration
 
-### Database and Query Design
+Applied migrations are immutable, so analytics was introduced through Flyway `V2__create_click_events.sql`, not by modifying V1. `click_events` contains a generated primary key, a required `short_link_id` foreign key, `occurred_at TIMESTAMPTZ`, required 64-character `ip_hash`, `referrer_host`, and `user_agent_family`. It deliberately has no cascade-delete behavior, preserving analytics after a link is disabled or expires.
 
-Add a Flyway `V2` migration for a durable `click_events` table containing a generated ID, `short_link_id` foreign key, `clicked_at TIMESTAMPTZ`, and nullable sanitized `referrer_origin`. Do not cascade-delete click events because disabled and expired links retain analytics.
+Indexes support the implemented access patterns: `(short_link_id, occurred_at DESC)` supports link-specific range queries, and `(occurred_at)` supports time-based access. PostgreSQL query-plan review remains necessary before changing aggregate volume or query shape.
 
-Use half-open time ranges, `[from, to)`, for exact counts and top-referrer aggregation. Start with indexes on `(short_link_id, clicked_at)` and evaluate a `(short_link_id, clicked_at, referrer_origin)` index against PostgreSQL query plans for the grouped top-referrer query. Bound the requested range and result limit to prevent unbounded aggregation work.
+### Privacy Decisions
 
-### Transaction and Failure Risks
+- Raw IP addresses are never stored. Each event stores an HMAC-SHA-256 value using the configured analytics secret, providing stable same-client correlation for that secret without retaining the plaintext address.
+- The `Referer` is parsed and reduced to a lowercase hostname. User info, path, query, and fragment are discarded; absent or malformed values are recorded as `direct`.
+- Raw user-agent strings are not retained. The stored value is only a coarse family: `bot`, `Edge`, `Firefox`, `Chrome`, `Safari`, `other`, or `unknown`.
+- Cookies and forwarded-client headers are not collected. `ClickMetadataExtractor` uses `getRemoteAddr()` and intentionally does not trust `X-Forwarded-For` until a trusted-proxy boundary is approved.
+- Retention, deletion, export obligations, and the business policy for bot counting still require product and privacy approval.
 
-Immediate, durable, exact analytics requires synchronous event persistence before issuing `302`. If event persistence fails but the redirect proceeds, an accepted click is permanently lost; the failure contract must instead prevent a successful redirect or explicitly accept loss. A read through `resolve` followed by a separate insert also races with disablement. A single transactional redirect-recording operation is the conservative starting point.
+### Synchronous-Write Trade-Off
 
-### Privacy Risks
+The redirect records an event with `saveAndFlush` before constructing `302`, giving immediate read-after-redirect visibility and preventing a redirect from being reported as successful after a silently lost accepted event. The cost is that analytics database latency and write failures are on the redirect critical path: a persistence failure prevents the redirect response. The current controller resolves and then records in separate service transactions, so disablement can race between those operations; this is acceptable only with explicit product approval or should be replaced with one transactional resolve-and-record operation.
 
-Never store raw IP addresses. Do not retain raw user agents, cookies, or the complete `Referer` URL because query strings, paths, and credentials can contain sensitive data. Normalize an accepted referrer to a bounded origin and discard user-info, path, query, and fragment. Define retention and deletion policies before event volumes grow.
+### Regression Risks
 
-`ClickMetadataExtractor` currently uses `HttpServletRequest.getRemoteAddr()` and does not trust `X-Forwarded-For`, because clients can spoof that header without a trusted-proxy configuration. Production deployment requires an approved proxy trust boundary and forwarding-header policy before deriving client identity behind a reverse proxy.
+- Analytics must not change redirect status, destination, cache headers, bodylessness, or path matching.
+- Unknown, expired, disabled, and malformed-code requests must not persist events.
+- Aggregates must remain accessible after disablement or expiration, without allowing a disabled or expired redirect.
+- Changes to proxy handling can alter IP hashing and the privacy boundary; they require an explicit trusted-forwarding configuration.
+- H2 coverage does not prove PostgreSQL `TIMESTAMPTZ`, Flyway, index, or transaction behavior.
 
-### Required Regression Coverage
+### Tests Added
 
-- `RedirectControllerTest`: active redirects record exactly one click; invalid, unknown, expired, and disabled requests record none; all existing status and header assertions remain unchanged.
-- Analytics service and repository tests: exact counts, range boundaries, top-referrer ordering and ties, null referrers, sanitized origins, and analytics access for disabled or expired links.
-- `ShortLinkApiIntegrationTest`: immediate visibility after redirect, durable events across application-context restart, disabled/expired analytics access, and the agreed analytics-write failure behavior.
-- PostgreSQL Testcontainers tests: apply Flyway migrations and verify event constraints, indexes, aggregation queries, and transaction behavior against the production dialect.
+- `RedirectControllerTest` verifies exactly one analytics call for a resolved redirect, no analytics calls for rejected or malformed requests, and preserves the established redirect headers and statuses.
+- `AnalyticsServiceTest` verifies HMAC IP storage, same-IP determinism, distinct-IP output, hostname-only referrers, the default range, top-referrer limit, and invalid/oversized ranges.
+- `ShortLinkControllerTest` verifies the analytics endpoint delegates ISO-8601 ranges and returns the structured invalid-range error.
+- `ShortLinkApiIntegrationTest` verifies two redirects immediately produce two stored events and an aggregate count of two; unknown, disabled, and expired redirects add none; analytics remains available after disablement.
 
-## Engineer Sign-Off Criteria
+### Actual Validation Results
 
-- Confirm the required-versus-optional idempotency-key policy.
-- Approve `410 Gone` or change behavior to the required state-disclosure policy for disabled and expired links.
-- Add PostgreSQL Testcontainers tests that run Flyway migrations and verify constraints, indexes, and transaction behavior against the production dialect.
-- Add and review analytics as a separate brownfield change, including privacy, retention, bot, and delivery-failure decisions.
-- Define authentication, authorization, rate limits, and management-endpoint security before production use.
-- Re-run the complete verification suite after the above changes and review the resulting evidence before release.
+On 2026-09-14, `./mvnw.cmd test` completed successfully: 63 tests ran with 0 failures, 0 errors, and 0 skipped tests. The repository evidence in `target/surefire-reports` includes analytics service, controller, redirect, and lifecycle integration test reports. The suite uses H2 under the `test` profile, with Flyway disabled and Hibernate `create-drop`, so it validates application behavior but not production PostgreSQL migration compatibility.
+
+## Engineer Approval Criteria
+
+- Approve the current synchronous-write failure contract: analytics persistence failure prevents the redirect. Otherwise implement and test the accepted-loss or asynchronous-delivery contract.
+- Decide whether the resolve-then-record disablement race is acceptable, or replace it with a single transactional redirect-recording operation and add a concurrency test.
+- Approve the HMAC secret lifecycle, retention period, deletion/export obligations, and whether `bot` events are included in totals.
+- Approve the `getRemoteAddr()` proxy boundary before deploying behind a reverse proxy; do not accept client-controlled forwarding headers without trusted-proxy configuration.
+- Add PostgreSQL Testcontainers coverage that applies Flyway V1 and V2 and verifies constraints, indexes, aggregate queries, and the chosen transaction behavior.
+- Resolve the pre-existing idempotency-key requirement mismatch and the `410 Gone` versus nondisclosing `404` policy for disabled and expired links.
+- Define authentication, authorization, rate limits, and management-endpoint protection before production release, then re-run the complete verification suite and review its evidence.
 
 ## Runnable Lifecycle
 
